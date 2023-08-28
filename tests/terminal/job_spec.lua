@@ -90,7 +90,7 @@ describe("stdio", function()
             })
             assert(job:start())
             job:wait()
-            assert.spy(raw).was.called_with(string.format("%s\n", ansi_hello))
+            assert.spy(raw).was.called_with(string.format("%s\n", common.ansi_hello))
             assert.spy(scrubed).was.called_with("hello\n")
         end)
 

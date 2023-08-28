@@ -1,12 +1,13 @@
 ---@class terminal.ITerminal
 ---@field title string
 ---@field convert_eol? boolean convert `\n` to `\r\n`
+---@field protected id number
 ---@field protected term_buf? number
 ---@field protected term_chan? number
 ---@field protected term_win? number
 ---@field protected win? number
 local ITerminal = {
-    terms_id2 = {},
+    id2term = {},
 }
 
 ---@class terminal.NewITerminalArgs
@@ -45,7 +46,8 @@ end
 ---open terminal, abstract function
 function ITerminal:open()
     self.term_buf = vim.api.nvim_create_buf(true, false)
-    vim.api.nvim_buf_set_name(self.term_buf, "term://zsh")
+    local buf_name = string.format("term://%s", self.id)
+    vim.api.nvim_buf_set_name(self.term_buf, buf_name)
     self.term_chan = vim.api.nvim_open_term(self.term_buf, {
         on_input = function(event, term, b, data)
             vim.print(vim.inspect(arg))
@@ -84,6 +86,8 @@ function Terminal:new(options)
     local o = ITerminal:new(options) --[[@as terminal.Terminal]]
     self.__index = self
     setmetatable(o, self)
+    o.id = #ITerminal.id2term
+    table.insert(ITerminal.id2term, o)
     return o
 end
 
@@ -110,6 +114,8 @@ function FloatTerminal:new(options)
     local o = options or ITerminal:new(options)
     self.__index = self
     setmetatable(o, self)
+    o.id = #ITerminal.id2term
+    table.insert(ITerminal.id2term, o)
     return o --[[@as terminal.FloatTerminal]]
 end
 
