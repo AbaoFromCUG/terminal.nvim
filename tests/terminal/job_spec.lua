@@ -1,12 +1,7 @@
 local spy = require("luassert.spy")
 local Job = require("terminal.job")
-local Path = require("plenary.path")
-
-local function scrub_ansi(str)
-    -- scrub ANSI color codes
-    str = str:gsub("\27%[[0-9;mK]+", "")
-    return str
-end
+local charset = require("terminal.charset")
+local common = require("tests.terminal.common")
 
 describe("basic", function()
     it("status", function()
@@ -79,16 +74,15 @@ describe("stdio", function()
 
         -- echo "\x1b[31;40;9mhello\x1b[0m"
         it("echo ANSI", function()
-            local ansi_hello = "\x1b[31;40;9mhello\x1b[0m"
             local raw = spy.new(function() end)
             local scrubed = spy.new(function() end)
             local job = Job:new({
                 cmd = "echo",
-                args = { ansi_hello },
+                args = { common.ansi_hello },
                 on_stdout = function(data)
                     if data then
                         raw(data)
-                        scrubed(scrub_ansi(data))
+                        scrubed(charset.scrub_ansi(data))
                     else
                         --stdout end
                     end
@@ -102,11 +96,10 @@ describe("stdio", function()
 
         -- cat tests/ansi.txt
         it("cat ANSI file", function()
-            local ansi_file = Path:new(vim.loop.cwd()) / "tests/ansi.txt"
             local s = spy.new(function() end)
             local job = Job:new({
                 cmd = "cat",
-                args = { ansi_file.filename },
+                args = { common.ansi_file },
                 on_stdout = function(data)
                     if data then
                         s(data)
@@ -118,7 +111,7 @@ describe("stdio", function()
             assert(job:start())
             job:wait()
             -- readfile keep ANSI code
-            local contents = vim.fn.readfile(ansi_file.filename)
+            local contents = vim.fn.readfile(common.ansi_file)
             -- readfile will ignore last line NL
             local content = table.concat(contents, "\n") .. "\n"
             assert.spy(s).was.called_with(content)
@@ -148,7 +141,6 @@ describe("stdio", function()
 
         -- echo "\x1b[31;40;9mhello\x1b[0m" |cat
         it("cat ANSI", function()
-            local ansi_hello = "\x1b[31;40;9mhello\x1b[0m"
             local raw = spy.new(function() end)
             local scrubed = spy.new(function() end)
             local job = Job:new({
@@ -156,17 +148,17 @@ describe("stdio", function()
                 on_stdout = function(data)
                     if data then
                         raw(data)
-                        scrubed(scrub_ansi(data))
+                        scrubed(charset.scrub_ansi(data))
                     else
                         --stdout end
                     end
                 end,
             })
             assert(job:start())
-            job:write(ansi_hello)
+            job:write(common.ansi_hello)
             job:wait(1000)
             job:shutdown()
-            assert.spy(raw).was.called_with(string.format("%s", ansi_hello))
+            assert.spy(raw).was.called_with(string.format("%s", common.ansi_hello))
             assert.spy(scrubed).was.called_with("hello")
         end)
     end)

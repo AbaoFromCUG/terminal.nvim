@@ -1,28 +1,65 @@
-local Terminal = require("terminal.terminal").Terminal
-local FloatTerminal = require("terminal.terminal").FloatTerminal
+local Terminal = require("terminal.term").Terminal
+local FloatTerminal = require("terminal.term").FloatTerminal
+local Job = require("terminal.job")
+local Path = require("plenary.path")
+local charset = require("terminal.charset")
+local bufop = require("terminal.bufop")
+local common = require("tests.terminal.common")
 
 describe("terminal", function()
-    describe("basic", function()
-        it("inheritance", function()
-            local t1 = Terminal:new({
-                position = "top",
-                title = "MyTerm",
+    it("inheritance", function()
+        local t1 = Terminal:new({
+            position = "top",
+            title = "MyTerm",
+        })
+        local t2 = Terminal:new({
+            title = "AnotherTerm",
+        })
+        -- print(vim.inspect(t1))
+        assert.equals(t1.position, "top")
+        assert.equals(t2.position, "bottom")
+        assert.equals(t1.title, "MyTerm")
+        assert.equals(t2.title, "AnotherTerm")
+    end)
+    describe("echo", function()
+        it("raw", function()
+            local t = Terminal:new()
+            local job = Job:new({
+                cmd = "echo",
+                args = { "hello" },
             })
-            local t2 = Terminal:new({
-                title = "AnotherTerm",
-            })
-            assert.equals(t1.position, "top")
-            assert.equals(t2.position, "bottom")
-            assert.equals(t1.title, "MyTerm")
-            assert.equals(t2.title, "AnotherTerm")
-        end)
-
-        it("shell", function()
-            local t = Terminal:new({
-                cmd = "bash",
-            })
+            assert(common.bridge(job, t))
             t:open()
+            assert(job:start())
+            assert(job:wait())
+
+            common.sleep(2000)
+
+            t:get_line(100)
+            assert.equals("hello", t:get_line(0))
         end)
+        it("ANSI", function()
+            local t = Terminal:new()
+            local job = Job:new({
+                cmd = "echo",
+                args = { common.ansi_hello },
+            })
+            assert(common.bridge(job, t))
+            t:open()
+            assert(job:start())
+            assert(job:wait())
+
+            local buf = t.term_buf
+            local content = bufop.get_buf_content(buf)
+            assert.equals("hello", "content")
+        end)
+    end)
+
+    it("shell", function()
+        local t = Terminal:new({
+            cmd = "bash",
+        })
+        t:open()
     end)
 end)
 
@@ -32,6 +69,7 @@ describe("float terminal", function()
             local t1 = FloatTerminal:new({
                 title = "Term1",
             })
+            -- print(vim.inspect(t1))
             local t2 = FloatTerminal:new()
             assert.equals(t1.title, "Term1")
             assert.equals(t2.title, "Terminal")

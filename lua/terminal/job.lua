@@ -103,9 +103,9 @@ function Job:start()
     }, function(code, signal) -- on exit
         for key, hook in pairs(self.shared_exit) do
             assert(type(key) == "string" or type(key) == "number")
-            self.exitcode = code
             hook(code, signal)
         end
+        self.exitcode = code
         self.status = "shutdown"
     end)
     if not self.handle then
@@ -158,6 +158,10 @@ function Job:wait(timeout_ms, interval_ms)
     vim.wait(timeout_ms, function()
         return self:get_status() == "shutdown"
     end, interval_ms)
+    if self:get_status() == "shutdown" then
+        return true
+    end
+    return false, "job's status is " .. self:get_status()
 end
 
 function Job:shutdown()

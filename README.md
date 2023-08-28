@@ -9,23 +9,20 @@ Terminal will be reused by tasks
 
 ```lua
 
-local terminal = Terminal:new({
-    cmd = "zsh"
-})
+local terminal = Terminal:new()
 
-terminal:add_job(Job:new({
+local cmake = Job:new({
     cmd = "cmake"
     on_exit = function(code)
         -- job complete
     end
-}))
-
-local yarn = Job:new({
-    cmd = "yarn"
 })
-terminal:add_job(yarn)
-yarn:wait()
+cmake:watch_stdout(function(data)
+    terminal:write(data)
+end)
+job:wait()
 -- job completed
+-- terminal can be reused
 
 ```
 
