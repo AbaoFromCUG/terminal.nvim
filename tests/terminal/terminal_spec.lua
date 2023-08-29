@@ -6,8 +6,8 @@ local charset = require("terminal.charset")
 local bufop = require("terminal.bufop")
 local common = require("tests.terminal.common")
 
-describe("terminal", function()
-    it("inheritance", function()
+describe("inheritance", function()
+    it("property", function()
         local t1 = Terminal:new({
             position = "top",
             title = "MyTerm",
@@ -21,6 +21,9 @@ describe("terminal", function()
         assert.equals(t1.title, "MyTerm")
         assert.equals(t2.title, "AnotherTerm")
     end)
+end)
+
+describe("terminal", function()
     describe("echo", function()
         it("raw", function()
             local t = Terminal:new()

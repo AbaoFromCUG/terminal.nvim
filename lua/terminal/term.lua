@@ -1,14 +1,17 @@
 ---@class terminal.ITerminal
 ---@field title string
 ---@field convert_eol? boolean convert `\n` to `\r\n`
----@field protected id number
+---@field id number
 ---@field protected term_buf? number
 ---@field protected term_chan? number
 ---@field protected term_win? number
----@field protected win? number
+---@field protected width? number
+---@field protected height? number
 local ITerminal = {
     id2term = {},
 }
+ITerminal.__index = ITerminal
+setmetatable(ITerminal, {})
 
 ---@class terminal.NewITerminalArgs
 ---@field title? string
@@ -20,9 +23,11 @@ local ITerminal = {
 ---@param options? terminal.NewITerminalArgs
 ---@return terminal.ITerminal
 function ITerminal:new(options)
+    assert(self ~= ITerminal, "ITerminal is abstract class")
     local o = vim.tbl_deep_extend("force", { title = "Terminal", convert_eol = true }, options or {}) --[[@as terminal.ITerminal]]
-    self.__index = self
     setmetatable(o, self)
+    o.id = #ITerminal.id2term
+    table.insert(ITerminal.id2term, o)
     return o
 end
 
@@ -55,7 +60,13 @@ function ITerminal:open()
     })
 end
 
-function ITerminal:get_height() end
+function ITerminal:get_width()
+    return self.width
+end
+
+function ITerminal:get_height()
+    return self.height
+end
 
 ---get line from buffer, or nil if the line index not exists
 ---@param index any
@@ -71,30 +82,27 @@ end
 
 ---@alias TerminalPoisiton 'top'|'bottom'|'left'|'right'
 
----@class terminal.Terminal: terminal.ITerminal
----@field position TerminalPoisiton
-local Terminal = ITerminal:new()
-
 ---@class terminal.NewTerminalArgs: terminal.NewITerminalArgs
 ---@field position? TerminalPoisiton default 'top'
 
----FloatTerminal constructor
+---@class terminal.Terminal: terminal.ITerminal
+---@field position TerminalPoisiton
+local Terminal = {}
+Terminal.__index = Terminal
+setmetatable(Terminal, {
+    __index = ITerminal,
+})
+
+---Terminal constructor
 ---@param options? terminal.NewTerminalArgs
 ---@return terminal.Terminal
 function Terminal:new(options)
-    options = vim.tbl_deep_extend("force", { position = "bottom" }, options or {}) --[[@as terminal.NewTerminalArgs]]
-    local o = ITerminal:new(options) --[[@as terminal.Terminal]]
-    self.__index = self
-    setmetatable(o, self)
-    o.id = #ITerminal.id2term
-    table.insert(ITerminal.id2term, o)
+    options = vim.tbl_deep_extend("keep", options or {}, { position = "bottom" }) --[[@as terminal.NewTerminalArgs]]
+    local o = ITerminal.new(Terminal, options) --[[@as terminal.Terminal]]
     return o
 end
 
 function Terminal:open()
-    if self.term_buf then
-        return
-    end
     ITerminal.open(self)
     local output = vim.cmd("botright split")
     local win = vim.api.nvim_get_current_win()
@@ -103,7 +111,11 @@ function Terminal:open()
 end
 
 ---@class terminal.FloatTerminal: terminal.ITerminal
-local FloatTerminal = ITerminal:new()
+local FloatTerminal = {}
+FloatTerminal.__index = FloatTerminal
+setmetatable(FloatTerminal, {
+    __index = ITerminal,
+})
 
 ---@class terminal.NewFloatTerminalArgs: terminal.NewITerminalArgs
 
@@ -111,19 +123,15 @@ local FloatTerminal = ITerminal:new()
 ---@param options? terminal.NewFloatTerminalArgs
 ---@return terminal.FloatTerminal
 function FloatTerminal:new(options)
-    local o = options or ITerminal:new(options)
-    self.__index = self
-    setmetatable(o, self)
-    o.id = #ITerminal.id2term
-    table.insert(ITerminal.id2term, o)
+    local o = ITerminal.new(FloatTerminal, options)
     return o --[[@as terminal.FloatTerminal]]
 end
 
 function FloatTerminal:open()
     ITerminal.open(self)
-    local width = math.ceil(math.min(vim.o.columns, math.max(80, vim.o.columns - 20)))
-    local height = math.ceil(math.min(vim.o.lines, math.max(20, vim.o.lines - 10)))
-    self.term_win = vim.api.nvim_open_win(self.term_buf, true, { relative = "win", row = 10, col = 10, width = width, height = height })
+    self.width = math.ceil(math.min(vim.o.columns, math.max(80, vim.o.columns - 20)))
+    self.height = math.ceil(math.min(vim.o.lines, math.max(20, vim.o.lines - 10)))
+    self.term_win = vim.api.nvim_open_win(self.term_buf, true, { relative = "win", row = 10, col = 10, width = self.width, height = self.height })
     return self
 end
 
