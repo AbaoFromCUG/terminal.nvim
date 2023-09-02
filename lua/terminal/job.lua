@@ -192,14 +192,15 @@ function Job:_jobstart()
                 self:_on_stdout()
                 return
             end
-            self:_on_stdout(table.concat(data, "\n"))
+            data = table.concat(data, vim.api.nvim_replace_termcodes("<CR>", true, true, true))
+            self:_on_stdout(data)
         end,
         on_stderr = function(chan_id, data, name)
             assert(chan_id == chan)
             assert(name == "stderr")
 
             if #data == 1 and data[1] == "" then
-                self:_on_stdout()
+                self:_on_stderr()
                 return
             end
             self:_on_stderr(data)

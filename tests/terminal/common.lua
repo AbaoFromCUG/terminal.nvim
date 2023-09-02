@@ -4,9 +4,7 @@ local M = {}
 
 M.ansi_file = (Path:new(vim.loop.cwd()) / "tests/ansi.txt").filename
 
-M.ansi_file_content = [[[31;40;9mSimple ANSI file
-[35;40;4mJust cat me
-[0m]]
+M.ansi_file_content = "\x1b[31;40;9mSimple ANSI file\n\x1b[35;40;4mJust cat me\n\x1b[0m]]"
 
 M.ansi_hello = "\x1b[31;40;9mhello\x1b[0m"
 

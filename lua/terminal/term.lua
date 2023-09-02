@@ -2,11 +2,8 @@
 ---@field title string
 ---@field convert_eol? boolean convert `\n` to `\r\n`
 ---@field id number
----@field protected term_buf? number
 ---@field protected term_chan? number
----@field protected term_win? number
----@field protected width? number
----@field protected height? number
+---@field protected component? NuiPopup|NuiSplit
 local ITerminal = {
     id2term = {},
 }
@@ -50,43 +47,73 @@ end
 
 ---open terminal, abstract function
 function ITerminal:open()
-    self.term_buf = vim.api.nvim_create_buf(true, false)
+    if self.component then
+        self.component:show()
+        return
+    end
+    self:_layout()
+    self.component:mount()
+    local bufnr = self.component.bufnr
     local buf_name = string.format("term://%s", self.id)
-    vim.api.nvim_buf_set_name(self.term_buf, buf_name)
-    self.term_chan = vim.api.nvim_open_term(self.term_buf, {
+    vim.api.nvim_buf_set_name(bufnr, buf_name)
+    self.term_chan = vim.api.nvim_open_term(bufnr, {
         on_input = function(event, term, b, data)
-            vim.print(vim.inspect(arg))
+            vim.print(vim.inspect(event))
+            vim.print(vim.inspect(term))
+            vim.print(vim.inspect(b))
+            vim.print(vim.inspect(data))
         end,
     })
 end
 
+function ITerminal:_layout() end
+
+function ITerminal:hide()
+    self.component:hide()
+end
+
+function ITerminal:get_bufnr()
+    return self.component.bufnr
+end
+
+function ITerminal:close()
+    self.component:unmount()
+    self.component = nil
+end
+
 function ITerminal:get_width()
-    return self.width
+    local winid = self.component.winid
+    return vim.api.nvim_win_get_width(winid)
 end
 
 function ITerminal:get_height()
-    return self.height
+    local winid = self.component.winid
+    return vim.api.nvim_win_get_height(winid)
 end
 
 ---get line from buffer, or nil if the line index not exists
 ---@param index any
 ---@return string|nil
 function ITerminal:get_line(index)
-    local line_count = vim.api.nvim_buf_line_count(self.term_buf)
+    local bufnr = self.component.bufnr
+    local line_count = vim.api.nvim_buf_line_count(bufnr)
     if index < line_count then
-        local lines = vim.api.nvim_buf_get_lines(self.term_buf, index, index + 1, true)
+        local lines = vim.api.nvim_buf_get_lines(bufnr, index, index + 1, true)
         assert(#lines == 1)
         return lines[1]
     end
 end
 
----@alias TerminalPoisiton 'top'|'bottom'|'left'|'right'
-
 ---@class terminal.NewTerminalArgs: terminal.NewITerminalArgs
----@field position? TerminalPoisiton default 'top'
+---@field relative? nui_split_option_relative_type|nui_split_option_relative
+---@field position? nui_split_option_position
+---@field size? number|string|nui_split_option_size
 
 ---@class terminal.Terminal: terminal.ITerminal
----@field position TerminalPoisiton
+---@field relative nui_split_option_relative_type|nui_split_option_relative
+---@field position nui_split_option_position
+---@field size number|string|nui_split_option_size
+
 local Terminal = {}
 Terminal.__index = Terminal
 setmetatable(Terminal, {
@@ -97,20 +124,24 @@ setmetatable(Terminal, {
 ---@param options? terminal.NewTerminalArgs
 ---@return terminal.Terminal
 function Terminal:new(options)
-    options = vim.tbl_deep_extend("keep", options or {}, { position = "bottom" }) --[[@as terminal.NewTerminalArgs]]
+    local default_options = { position = "bottom", size = "30%", relative = "win" }
+    options = vim.tbl_deep_extend("keep", options or {}, default_options) --[[@as terminal.NewTerminalArgs]]
     local o = ITerminal.new(Terminal, options) --[[@as terminal.Terminal]]
     return o
 end
 
-function Terminal:open()
-    ITerminal.open(self)
-    local output = vim.cmd("botright split")
-    local win = vim.api.nvim_get_current_win()
-    vim.api.nvim_win_set_buf(win, self.term_buf)
-    return self
+function Terminal:_layout()
+    local Split = require("nui.split")
+    self.component = Split({
+        relative = self.relative,
+        position = self.position,
+        size = self.size,
+    })
 end
 
 ---@class terminal.FloatTerminal: terminal.ITerminal
+---@field position nui_popup_internal_position
+---@field size nui_popup_internal_size
 local FloatTerminal = {}
 FloatTerminal.__index = FloatTerminal
 setmetatable(FloatTerminal, {
@@ -118,21 +149,26 @@ setmetatable(FloatTerminal, {
 })
 
 ---@class terminal.NewFloatTerminalArgs: terminal.NewITerminalArgs
+---@field position? nui_popup_internal_position
+---@field size? nui_popup_internal_size
 
 ---FloatTerminal constructor
 ---@param options? terminal.NewFloatTerminalArgs
 ---@return terminal.FloatTerminal
 function FloatTerminal:new(options)
+    local default_options = { position = "50%", size = "80%", relative = "win" }
+    options = vim.tbl_deep_extend("keep", options or {}, default_options) --[[@as terminal.NewFloatTerminalArgs]]
+
     local o = ITerminal.new(FloatTerminal, options)
     return o --[[@as terminal.FloatTerminal]]
 end
 
-function FloatTerminal:open()
-    ITerminal.open(self)
-    self.width = math.ceil(math.min(vim.o.columns, math.max(80, vim.o.columns - 20)))
-    self.height = math.ceil(math.min(vim.o.lines, math.max(20, vim.o.lines - 10)))
-    self.term_win = vim.api.nvim_open_win(self.term_buf, true, { relative = "win", row = 10, col = 10, width = self.width, height = self.height })
-    return self
+function FloatTerminal:_layout()
+    local Popup = require("nui.popup")
+    self.component = Popup({
+        position = self.position,
+        size = self.size,
+    })
 end
 
 local M = {

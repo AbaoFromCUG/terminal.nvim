@@ -12,7 +12,7 @@ Terminal will be reused by tasks
 local terminal = Terminal:new()
 
 local cmake = Job:new({
-    cmd = "cmake"
+    cmd = "cmake",
     on_exit = function(code)
         -- job complete
     end
@@ -20,8 +20,7 @@ local cmake = Job:new({
 cmake:watch_stdout(function(data)
     terminal:write(data)
 end)
-job:wait()
--- job completed
+cmake:wait()
 -- terminal can be reused
 
 ```
