@@ -1,9 +1,26 @@
+---@alias InputCallback fun(data:string)
+
+---merge default options
+---@param default table<string, any>
+---@param options table<string, any>
+---@param properties string[]
+local function merge_default(default, options, properties)
+    for _, property in ipairs(properties) do
+        if options[property] ~= nil then
+            default[property] = options[property]
+        end
+    end
+    return default
+end
+
 ---@class terminal.ITerminal
 ---@field title string
 ---@field convert_eol? boolean convert `\n` to `\r\n`
 ---@field id number
+---@field protected bufnr? number
+---@field protected winid? number
 ---@field protected term_chan? number
----@field protected component? NuiPopup|NuiSplit
+---@field private data_hooks table<string|number, InputCallback>
 local ITerminal = {
     id2term = {},
 }
@@ -15,16 +32,24 @@ setmetatable(ITerminal, {})
 ---@field cmd? string
 ---@field args? string[]
 ---@field convert_eol? boolean convert `\n` to `\r\n`
+---@field on_input fun(data: string)
 
 ---Terminal constructor
 ---@param options? terminal.NewITerminalArgs
 ---@return terminal.ITerminal
 function ITerminal:new(options)
     assert(self ~= ITerminal, "ITerminal is abstract class")
-    local o = vim.tbl_deep_extend("force", { title = "Terminal", convert_eol = true }, options or {}) --[[@as terminal.ITerminal]]
+    options = options or {}
+    local o = {
+        title = "Terminal",
+        convert_eol = true,
+        data_hooks = {},
+    }
+    merge_default(o, options, { "title", "cmd", "args", "convert_eol" })
     setmetatable(o, self)
     o.id = #ITerminal.id2term
     table.insert(ITerminal.id2term, o)
+    o:watch_input(options.on_input)
     return o
 end
 
@@ -33,7 +58,7 @@ end
 ---@param callback? function
 function ITerminal:write(data, callback)
     vim.schedule(function()
-        if data then
+        if data ~= nil then
             if self.convert_eol then
                 data = data:gsub("\n", "\r\n")
             end
@@ -45,71 +70,95 @@ function ITerminal:write(data, callback)
     end)
 end
 
----open terminal, abstract function
-function ITerminal:open()
-    if self.component then
-        self.component:show()
-        return
+---add input watcher, if hook is nil,  will remove the watcher by key
+---@param hook? InputCallback
+---@param key? string
+function ITerminal:watch_input(hook, key)
+    if key then
+        self.data_hooks[key] = hook
     end
+    if hook then
+        table.insert(self.data_hooks, hook)
+    end
+end
+
+---open terminal
+function ITerminal:open()
     self:_layout()
-    self.component:mount()
-    local bufnr = self.component.bufnr
     local buf_name = string.format("term://%s", self.id)
-    vim.api.nvim_buf_set_name(bufnr, buf_name)
-    self.term_chan = vim.api.nvim_open_term(bufnr, {
-        on_input = function(event, term, b, data)
-            vim.print(vim.inspect(event))
-            vim.print(vim.inspect(term))
-            vim.print(vim.inspect(b))
-            vim.print(vim.inspect(data))
+    vim.api.nvim_buf_set_name(self.bufnr, buf_name)
+    self.term_chan = vim.api.nvim_open_term(self.bufnr, {
+        on_input = function(event, term, buf, data)
+            assert(event == "input")
+            assert(term == self.term_chan)
+            assert(buf == self.bufnr)
+            for key, hook in pairs(self.data_hooks) do
+                assert(type(key) == "string" or type(key) == "number")
+                hook(data)
+            end
         end,
     })
 end
 
 function ITerminal:_layout() end
 
-function ITerminal:hide()
-    self.component:hide()
-end
-
 function ITerminal:get_bufnr()
-    return self.component.bufnr
+    return self.bufnr
 end
 
 function ITerminal:close()
-    self.component:unmount()
-    self.component = nil
+    -- vim.api.nvim_cha
 end
 
 function ITerminal:get_width()
-    local winid = self.component.winid
-    return vim.api.nvim_win_get_width(winid)
+    return vim.api.nvim_win_get_width(self.winid)
 end
 
 function ITerminal:get_height()
-    local winid = self.component.winid
-    return vim.api.nvim_win_get_height(winid)
+    return vim.api.nvim_win_get_height(self.winid)
 end
 
 ---get line from buffer, or nil if the line index not exists
----@param index any
+---@param index number
 ---@return string|nil
 function ITerminal:get_line(index)
-    local bufnr = self.component.bufnr
-    local line_count = vim.api.nvim_buf_line_count(bufnr)
+    local line_count = vim.api.nvim_buf_line_count(self.bufnr)
     if index < line_count then
-        local lines = vim.api.nvim_buf_get_lines(bufnr, index, index + 1, true)
+        local lines = vim.api.nvim_buf_get_lines(self.bufnr, index, index + 1, true)
         assert(#lines == 1)
         return lines[1]
     end
 end
 
----@class terminal.NewTerminalArgs: terminal.NewITerminalArgs
----@field relative? nui_split_option_relative_type|nui_split_option_relative
----@field position? nui_split_option_position
----@field size? number|string|nui_split_option_size
+---@class terminal.DetachmentTerminal: terminal.ITerminal
+---@field protected component? NuiPopup|NuiSplit
 
----@class terminal.Terminal: terminal.ITerminal
+local DetachmentTerminal = {}
+DetachmentTerminal.__index = DetachmentTerminal
+setmetatable(DetachmentTerminal, {
+    __index = ITerminal,
+})
+
+---@class terminal.NewDetachmentTerminalArgs: terminal.NewITerminalArgs
+
+---comment
+---@param options? terminal.NewDetachmentTerminalArgs
+function DetachmentTerminal:new(options)
+    local o = ITerminal.new(self, options)
+    return o
+end
+
+function DetachmentTerminal:_layout()
+    self.component:mount()
+    self.bufnr = self.component.bufnr
+    self.winid = self.component.winid
+end
+
+function DetachmentTerminal:close()
+    self.component:unmount()
+end
+
+---@class terminal.Terminal: terminal.DetachmentTerminal
 ---@field relative nui_split_option_relative_type|nui_split_option_relative
 ---@field position nui_split_option_position
 ---@field size number|string|nui_split_option_size
@@ -117,8 +166,13 @@ end
 local Terminal = {}
 Terminal.__index = Terminal
 setmetatable(Terminal, {
-    __index = ITerminal,
+    __index = DetachmentTerminal,
 })
+
+---@class terminal.NewTerminalArgs: terminal.NewDetachmentTerminalArgs
+---@field relative? nui_split_option_relative_type|nui_split_option_relative
+---@field position? nui_split_option_position
+---@field size? number|string|nui_split_option_size
 
 ---Terminal constructor
 ---@param options? terminal.NewTerminalArgs
@@ -126,7 +180,9 @@ setmetatable(Terminal, {
 function Terminal:new(options)
     local default_options = { position = "bottom", size = "30%", relative = "win" }
     options = vim.tbl_deep_extend("keep", options or {}, default_options) --[[@as terminal.NewTerminalArgs]]
-    local o = ITerminal.new(Terminal, options) --[[@as terminal.Terminal]]
+
+    local o = DetachmentTerminal.new(self, options) --[[@as terminal.Terminal]]
+    merge_default(o, options, { "position", "size", "relative" })
     return o
 end
 
@@ -136,19 +192,21 @@ function Terminal:_layout()
         relative = self.relative,
         position = self.position,
         size = self.size,
+        enter = true,
     })
+    DetachmentTerminal._layout(self)
 end
 
----@class terminal.FloatTerminal: terminal.ITerminal
+---@class terminal.FloatTerminal: terminal.DetachmentTerminal
 ---@field position nui_popup_internal_position
 ---@field size nui_popup_internal_size
 local FloatTerminal = {}
 FloatTerminal.__index = FloatTerminal
 setmetatable(FloatTerminal, {
-    __index = ITerminal,
+    __index = DetachmentTerminal,
 })
 
----@class terminal.NewFloatTerminalArgs: terminal.NewITerminalArgs
+---@class terminal.NewFloatTerminalArgs: terminal.NewDetachmentTerminalArgs
 ---@field position? nui_popup_internal_position
 ---@field size? nui_popup_internal_size
 
@@ -156,10 +214,11 @@ setmetatable(FloatTerminal, {
 ---@param options? terminal.NewFloatTerminalArgs
 ---@return terminal.FloatTerminal
 function FloatTerminal:new(options)
-    local default_options = { position = "50%", size = "80%", relative = "win" }
+    local default_options = { position = "50%", size = "80%" }
     options = vim.tbl_deep_extend("keep", options or {}, default_options) --[[@as terminal.NewFloatTerminalArgs]]
 
-    local o = ITerminal.new(FloatTerminal, options)
+    local o = DetachmentTerminal.new(self, options)
+    merge_default(o, options, { "position", "size" })
     return o --[[@as terminal.FloatTerminal]]
 end
 
@@ -168,13 +227,38 @@ function FloatTerminal:_layout()
     self.component = Popup({
         position = self.position,
         size = self.size,
+        enter = true,
     })
+    DetachmentTerminal._layout(self)
 end
+
+---@class terminal.AttachmentTerminal: terminal.ITerminal
+local AttachmentTerminal = {}
+AttachmentTerminal.__index = AttachmentTerminal
+setmetatable(AttachmentTerminal, {
+    __index = ITerminal,
+})
+
+---@class terminal.NewAttachmentTerminalArgs: terminal.NewITerminalArgs
+---@field winid number
+
+---AttachmentTerminal constructor
+---@param options terminal.NewAttachmentTerminalArgs
+---@return terminal.AttachmentTerminal
+function AttachmentTerminal:new(options)
+    local o = ITerminal.new(self, options)
+    merge_default(o, options, { "winid" })
+    self.bufnr = vim.api.nvim_create_buf(false, false)
+    return o --[[@as terminal.AttachmentTerminal]]
+end
+
+function AttachmentTerminal:_layout() end
 
 local M = {
     ITerminal = ITerminal,
     Terminal = Terminal,
     FloatTerminal = FloatTerminal,
+    AttachmentTerminal = AttachmentTerminal,
 }
 
 return M

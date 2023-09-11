@@ -14,9 +14,9 @@ local uv = vim.loop
 ---@field width? number width of pty terminal
 ---@field height? number height of pty terminal
 ---@field exitcode? number
----@field private shared_stdout table<string|number, StdoutCallback>
----@field private shared_stderr table<string|number, StdoutCallback>
----@field private shared_exit table<string|number, ExitCallback>
+---@field private stdout_hooks table<string|number, StdoutCallback>
+---@field private stderr_hooks table<string|number, StdoutCallback>
+---@field private exit_hooks table<string|number, ExitCallback>
 ---@field private status JobStatus
 ---@field private handle number|table<uv_process_t, uv_pipe_t, uv_pipe_t, uv_pipe_t>
 ---@field backend "spawn"|"jobstart"
@@ -44,9 +44,9 @@ function Job:new(options)
         status = "ready",
         backend = "spawn",
         pty = false,
-        shared_stdout = {},
-        shared_stderr = {},
-        shared_exit = {},
+        stdout_hooks = {},
+        stderr_hooks = {},
+        exit_hooks = {},
     }
     local o = vim.tbl_deep_extend("force", default_options, options or {}) --[[@as terminal.Job]]
     setmetatable(o, self)
@@ -56,39 +56,39 @@ function Job:new(options)
     return o
 end
 
----add shared stdout watcher, if hook is nil,  will remove the watcher by key
+---add stdout watcher, if hook is nil,  will remove the watcher by key
 ---@param hook? StdoutCallback
 ---@param key? string
 function Job:watch_stdout(hook, key)
     if key then
-        self.shared_stdout[key] = hook
+        self.stdout_hooks[key] = hook
     end
     if hook then
-        table.insert(self.shared_stdout, hook)
+        table.insert(self.stdout_hooks, hook)
     end
 end
 
----add shared stderr watcher, if hook is nil,  will remove the watcher by key
+---add stderr watcher, if hook is nil,  will remove the watcher by key
 ---@param hook? StderrCallback
 ---@param key? string
 function Job:watch_stderr(hook, key)
     if key then
-        self.shared_stderr[key] = hook
+        self.stderr_hooks[key] = hook
     end
     if hook then
-        table.insert(self.shared_stderr, hook)
+        table.insert(self.stderr_hooks, hook)
     end
 end
 
----add shared exit watcher, if hook is nil,  will remove the watcher by key
+---add exit watcher, if hook is nil,  will remove the watcher by key
 ---@param hook? ExitCallback
 ---@param key? string
 function Job:watch_exit(hook, key)
     if key then
-        self.shared_exit[key] = hook
+        self.exit_hooks[key] = hook
     end
     if hook then
-        table.insert(self.shared_exit, hook)
+        table.insert(self.exit_hooks, hook)
     end
 end
 
@@ -107,21 +107,21 @@ function Job:start()
 end
 
 function Job:_on_stdout(data)
-    for key, hook in pairs(self.shared_stdout) do
+    for key, hook in pairs(self.stdout_hooks) do
         assert(type(key) == "string" or type(key) == "number")
         hook(data)
     end
 end
 
 function Job:_on_stderr(data)
-    for key, hook in pairs(self.shared_stderr) do
+    for key, hook in pairs(self.stderr_hooks) do
         assert(type(key) == "string" or type(key) == "number")
         hook(data)
     end
 end
 
 function Job:_on_exit(code, signal)
-    for key, hook in pairs(self.shared_exit) do
+    for key, hook in pairs(self.exit_hooks) do
         assert(type(key) == "string" or type(key) == "number")
         hook(code, signal)
     end
@@ -192,7 +192,7 @@ function Job:_jobstart()
                 self:_on_stdout()
                 return
             end
-            data = table.concat(data, vim.api.nvim_replace_termcodes("<CR>", true, true, true))
+            data = table.concat(data, "\n")
             self:_on_stdout(data)
         end,
         on_stderr = function(chan_id, data, name)
@@ -241,7 +241,7 @@ end
 ---@param data string
 function Job:write(data)
     if self.status ~= "running" then
-        return false, string.format("The job status is %, can't write to stdin", self.status)
+        return false, string.format("The job status is %s, can't write to stdin", self.status)
     end
     if self.backend == "spawn" then
         local stdin = self.handle[2]
@@ -249,6 +249,7 @@ function Job:write(data)
     else
         vim.fn.chansend(self.handle, data)
     end
+    return true
 end
 
 ---wait until job shutdown

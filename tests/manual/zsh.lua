@@ -11,8 +11,11 @@ local function open()
     assert(t:get_width() > 0)
     assert(t:get_height() > 0)
     local job = Job:new({
-        cmd = "lazygit",
+        cmd = "zsh",
         pty = true,
+        env = {
+            TERM = vim.fn.getenv("TERM"),
+        },
         width = t:get_width(),
         height = t:get_height(),
         backend = "jobstart",

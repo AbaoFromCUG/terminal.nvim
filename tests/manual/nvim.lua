@@ -3,6 +3,8 @@
 local Job = require("terminal.job")
 local term = require("terminal.term")
 local FloatTerminal = term.FloatTerminal
+local bufop = require("terminal.bufop")
+local common = require("tests.terminal.common")
 
 local function open()
     local t = FloatTerminal:new({})
@@ -11,7 +13,8 @@ local function open()
     assert(t:get_width() > 0)
     assert(t:get_height() > 0)
     local job = Job:new({
-        cmd = "lazygit",
+        cmd = "nvim",
+        args = { "--noplugin", common.ansi_file },
         pty = true,
         width = t:get_width(),
         height = t:get_height(),

@@ -235,53 +235,6 @@ describe("stdio", function()
     end)
 end)
 
-describe("pty", function()
-    it("less", function()
-        local s = spy.new(function() end)
-        local job = Job:new({
-            cmd = "less",
-            args = { common.ansi_file },
-            pty = true,
-            width = 800,
-            height = 700,
-            backend = "jobstart",
-        })
-        assert(job:start())
-        assert.are.equal(job:get_status(), "running")
-        job:watch_stdout(function(data)
-            -- print("-----")
-            print(vim.inspect(data))
-            -- print("-----")
-            s(data)
-        end)
-        common.sleep(2000)
-        job:shutdown()
-        -- print("---expect--")
-        -- print("-----")
-        -- TODO: complete pty feature
-        -- assert.spy(s).are.called_with(common.ansi_file_content)
-    end)
-    it("watch", function()
-        local job = Job:new({
-            cmd = "watch",
-            args = { "-n", 1, "echo hello" },
-            pty = true,
-            width = 800,
-            height = 700,
-            backend = "jobstart",
-        })
-        assert(job:start())
-        assert.are.equal(job:get_status(), "running")
-        job:watch_stdout(function(data)
-            if data then
-                -- print(vim.inspect(data))
-            end
-        end)
-        common.sleep(2000)
-        job:shutdown()
-    end)
-end)
-
 describe("backend same", function()
     local tasks = {
         ls = {
@@ -304,7 +257,7 @@ describe("backend same", function()
             args = { common.ansi_hello },
         },
         cat_ansi = {
-            cmd = "echo",
+            cmd = "cat",
             args = { common.ansi_file },
         },
         env = {
