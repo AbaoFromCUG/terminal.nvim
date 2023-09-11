@@ -1,4 +1,4 @@
-*terminal.txt*           For NVIM v0.8.0           Last change: 2023 August 29
+*terminal.txt*          For NVIM v0.8.0         Last change: 2023 September 11
 
 ==============================================================================
 Table of Contents                                 *terminal-table-of-contents*
@@ -22,7 +22,7 @@ Terminal will be reused by tasks
     local terminal = Terminal:new()
     
     local cmake = Job:new({
-        cmd = "cmake"
+        cmd = "cmake",
         on_exit = function(code)
             -- job complete
         end
@@ -30,8 +30,7 @@ Terminal will be reused by tasks
     cmake:watch_stdout(function(data)
         terminal:write(data)
     end)
-    job:wait()
-    -- job completed
+    cmake:wait()
     -- terminal can be reused
 <
 
