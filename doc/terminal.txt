@@ -1,4 +1,4 @@
-*terminal.txt*          For NVIM v0.8.0         Last change: 2023 September 11
+*terminal.txt*          For NVIM v0.8.0         Last change: 2023 September 25
 
 ==============================================================================
 Table of Contents                                 *terminal-table-of-contents*
