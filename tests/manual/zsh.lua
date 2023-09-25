@@ -3,13 +3,15 @@
 local Job = require("terminal.job")
 local term = require("terminal.term")
 local FloatTerminal = term.FloatTerminal
+local Terminal = term.Terminal
 
 local function open()
-    local t = FloatTerminal:new({})
+    local t = Terminal:new({})
     t:open()
     assert(t)
     assert(t:get_width() > 0)
     assert(t:get_height() > 0)
+    -- vim.api.
     local job = Job:new({
         cmd = "zsh",
         pty = true,

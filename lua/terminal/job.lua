@@ -151,6 +151,7 @@ function Job:_spawn()
         self.exitcode = code
         self.status = "shutdown"
         self:_on_exit(code, signal)
+        self:_cleanup()
     end)
     if not handle then
         self.status = "error"
@@ -214,6 +215,7 @@ function Job:_jobstart()
             else
                 self:_on_exit(exit_code, 0)
             end
+            self:_cleanup()
         end,
         -- stdout_buffered = true,
         -- stderr_buffered = true,
@@ -279,7 +281,16 @@ function Job:shutdown(signal)
         uv.process_kill(handle, signal or "sigterm")
     else
         vim.fn.jobstop(self.handle)
+        vim.fn.chanclose(self.handle)
     end
+    self:_cleanup()
+end
+
+function Job:_cleanup()
+    self.stdout_hooks = {}
+    self.stderr_hooks = {}
+    self.exit_hooks = {}
+    self.handle = nil
 end
 
 return Job

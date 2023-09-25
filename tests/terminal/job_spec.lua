@@ -192,8 +192,7 @@ describe("stdio", function()
                 end,
             })
             assert(job:start())
-            job:wait(1000)
-            job:shutdown()
+            assert(job:wait(1000))
             assert.spy(s).was.called_with("error message\n")
         end)
     end)
@@ -212,7 +211,7 @@ describe("stdio", function()
                 table.insert(watched, data)
             end)
             assert(job:start())
-            job:wait()
+            assert(job:wait())
             assert.are.same(normal, watched)
         end)
         it("stderr", function()
@@ -316,4 +315,19 @@ describe("backend same", function()
             assert.equals(spawn_output, jobstart_output)
         end)
     end
+end)
+
+describe("cleanup", function()
+    it("shutdown bash", function()
+        local j = Job:new({
+            cmd = "bash",
+            pty = true,
+            backend = "jobstart",
+        })
+        j:start()
+        common.sleep(1000)
+        j:shutdown()
+        -- vim.fn.chanclose(id, stream?)
+        print(vim.inspect(vim.api.nvim_list_chans()))
+    end)
 end)

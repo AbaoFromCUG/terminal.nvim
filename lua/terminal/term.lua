@@ -84,7 +84,6 @@ end
 
 ---open terminal
 function ITerminal:open()
-    self:_layout()
     local buf_name = string.format("term://%s", self.id)
     vim.api.nvim_buf_set_name(self.bufnr, buf_name)
     self.term_chan = vim.api.nvim_open_term(self.bufnr, {
@@ -100,14 +99,14 @@ function ITerminal:open()
     })
 end
 
-function ITerminal:_layout() end
-
 function ITerminal:get_bufnr()
     return self.bufnr
 end
 
 function ITerminal:close()
-    -- vim.api.nvim_cha
+    vim.fn.chanclose(self.term_chan)
+    self.term_chan = nil
+    self.data_hooks = {}
 end
 
 function ITerminal:get_width()
@@ -148,14 +147,18 @@ function DetachmentTerminal:new(options)
     return o
 end
 
-function DetachmentTerminal:_layout()
+function DetachmentTerminal:open()
     self.component:mount()
     self.bufnr = self.component.bufnr
     self.winid = self.component.winid
+    ITerminal.open(self)
 end
 
 function DetachmentTerminal:close()
+    ITerminal.close(self)
     self.component:unmount()
+    self.bufnr = nil
+    self.winid = nil
 end
 
 ---@class terminal.Terminal: terminal.DetachmentTerminal
@@ -186,15 +189,19 @@ function Terminal:new(options)
     return o
 end
 
-function Terminal:_layout()
+function Terminal:open()
     local Split = require("nui.split")
     self.component = Split({
         relative = self.relative,
         position = self.position,
         size = self.size,
         enter = true,
+        win_options = {
+            number = false,
+            relativenumber = false,
+        },
     })
-    DetachmentTerminal._layout(self)
+    DetachmentTerminal.open(self)
 end
 
 ---@class terminal.FloatTerminal: terminal.DetachmentTerminal
@@ -222,17 +229,18 @@ function FloatTerminal:new(options)
     return o --[[@as terminal.FloatTerminal]]
 end
 
-function FloatTerminal:_layout()
+function FloatTerminal:open()
     local Popup = require("nui.popup")
     self.component = Popup({
         position = self.position,
         size = self.size,
         enter = true,
     })
-    DetachmentTerminal._layout(self)
+    DetachmentTerminal.open(self)
 end
 
 ---@class terminal.AttachmentTerminal: terminal.ITerminal
+---@field winid? number
 local AttachmentTerminal = {}
 AttachmentTerminal.__index = AttachmentTerminal
 setmetatable(AttachmentTerminal, {
@@ -248,11 +256,19 @@ setmetatable(AttachmentTerminal, {
 function AttachmentTerminal:new(options)
     local o = ITerminal.new(self, options)
     merge_default(o, options, { "winid" })
-    self.bufnr = vim.api.nvim_create_buf(false, false)
     return o --[[@as terminal.AttachmentTerminal]]
 end
 
-function AttachmentTerminal:_layout() end
+function AttachmentTerminal:open()
+    self.bufnr = vim.api.nvim_create_buf(false, false)
+    ITerminal.open(self)
+end
+
+function AttachmentTerminal:close()
+    ITerminal.close(self)
+    vim.api.nvim_buf_delete(self.bufnr, {})
+    self.bufnr = nil
+end
 
 local M = {
     ITerminal = ITerminal,

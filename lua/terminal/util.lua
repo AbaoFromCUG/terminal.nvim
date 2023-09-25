@@ -2,7 +2,7 @@ local M = {}
 
 ---get index of element
 ---@generic T
----@param array Array<T>
+---@param array T []
 ---@param value T
 ---@return integer|nil
 function M.indexOf(array, value)
